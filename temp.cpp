@@ -5,7 +5,14 @@ using namespace std;
 
 struct tspacket
 {
-    char header[4];
+    char syncbyte;
+    char t_err_indicator:1;
+    char payload_unit_start_indicator:1;
+    char transport_priority:1;
+    char16_t pid:13;
+    char transport_scrambling_control:2;
+    char adaptation_field_control:2;
+    char continuity_count:4;
     char content[184];
 };
 
