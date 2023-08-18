@@ -52,8 +52,14 @@ int main(int argc, char **argv) {
             }
             ofile << endl;
         }
-
+        
         packet->syncbyte = ch_packet[0];
+
+        if(packet->syncbyte != 0x47){
+            cout<<"sync byte error detected"<<endl;
+            continue;
+        }
+
         packet->t_err_indicator = ch_packet[1]>>7 & 0x1;
         packet->payload_unit_start_indicator = ch_packet[1]>>6 & 0x1;
         packet->transport_priority = ch_packet[1]>>5 & 0x1;
@@ -61,19 +67,42 @@ int main(int argc, char **argv) {
         packet->transport_scrambling_control = ch_packet[3]>>6 & 0x3;
         packet->adaptation_field_control = ch_packet[3]>>4 & 0x3;
         packet->continuity_count = ch_packet[3] & 0xf;
-        *packet->content = ch_packet[4];
-
-        if(packet->syncbyte != 0x47){
-            cout<<"sync byte error detected"<<endl;
-        }else{
-            stream.push_back(*packet);
+        for (int i=0;i<184;i++){
+            packet->content[i] = ch_packet[4+i];
         }
+
+        stream.push_back(*packet);
     }
 
-    unordered_map<uint16_t, vector<uint8_t *> > ts_pack_contents; 
+    cout << (char)(stream[0].content[1]) << endl << endl;
+
+    unordered_map<uint16_t, vector<uint8_t *> > ts_pack_contents;
     for(int i=0;i<stream.size();i++){
         tspacket p = stream[i];
         ts_pack_contents[p.pid].push_back(p.content);
+    }
+
+    unordered_map<uint8_t, vector<pespacket> > pes_packets;
+
+    for(auto stream: ts_pack_contents){
+        vector<uint8_t *> contents_184 = stream.second;
+        int rem_payload_bytes = -1;
+        for(auto content_ptr: contents_184){
+            for(int i=0;i<184;i++){
+                uint8_t *content_byte_ptr = content_ptr + i;
+                if(*(uint32_t *)content_byte_ptr>>8 == 1){
+                    pespacket pack;
+                    pack.start_prefix = *(uint32_t *)content_byte_ptr >> 8;
+                    pack.stream_id = *(uint32_t *)content_byte_ptr & 255;
+                    pack.packet_length = ((uint16_t *)content_byte_ptr)[2] & 0xffff;
+                    pack.flags1 = content_byte_ptr[6];
+                    pack.flags2 = content_byte_ptr[7];
+                    pack.header_length = content_byte_ptr[8];
+
+                    payload start byte = i + 9 + pack.flags2>>7 + pack.flags2
+                }
+            }
+        }
     }
 
     ifile.close();
