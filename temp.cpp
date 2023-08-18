@@ -16,6 +16,17 @@ struct tspacket
     uint8_t content[184];
 };
 
+struct pespacket
+{
+    uint32_t start_prefix:24;
+    uint8_t stream_id;
+    uint16_t packet_length;
+    uint8_t flags1;
+    uint8_t flags2;
+    uint8_t header_length;
+    uint8_t *pts, *dts, *optional, *payload;
+};
+
 int main(int argc, char **argv) {
     vector<string> args(argv, argv+argc);
 
@@ -36,30 +47,34 @@ int main(int argc, char **argv) {
     tspacket *packet = new tspacket();
     while (ifile.read(ch_packet, 188)) {
         for(int i=0;i<188;i++){
-            for(int j=7;j>=1;j--){
+            for(int j=7;j>=0;j--){
                 ofile << ((ch_packet[i]>>j) & 1);
             }
-            ofile << " " << endl;
+            ofile << endl;
         }
 
-        packet->syncbyte = (uint8_t)ch_packet[0];
+        packet->syncbyte = ch_packet[0];
         packet->t_err_indicator = ch_packet[1]>>7 & 0x1;
         packet->payload_unit_start_indicator = ch_packet[1]>>6 & 0x1;
         packet->transport_priority = ch_packet[1]>>5 & 0x1;
-        packet->pid = ( (ch_packet[1] & 0x1f)<<8 ) & ch_packet[2];
+        packet->pid = ( (ch_packet[1] & 0x1f)<<8 ) | ch_packet[2];
         packet->transport_scrambling_control = ch_packet[3]>>6 & 0x3;
         packet->adaptation_field_control = ch_packet[3]>>4 & 0x3;
         packet->continuity_count = ch_packet[3] & 0xf;
         *packet->content = ch_packet[4];
 
         if(packet->syncbyte != 0x47){
-            cout<<"sync byte error in packet number "<<(stream.size()+1)<<endl;
+            cout<<"sync byte error detected"<<endl;
         }else{
             stream.push_back(*packet);
         }
     }
 
-    cout<<stream.size()<<endl;
+    unordered_map<uint16_t, vector<uint8_t *> > ts_pack_contents; 
+    for(int i=0;i<stream.size();i++){
+        tspacket p = stream[i];
+        ts_pack_contents[p.pid].push_back(p.content);
+    }
 
     ifile.close();
     ofile.close();
