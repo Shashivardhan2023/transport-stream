@@ -35,6 +35,13 @@ int main(int argc, char **argv) {
     char ch_packet[188];
     tspacket *packet = new tspacket();
     while (ifile.read(ch_packet, 188)) {
+        for(int i=0;i<188;i++){
+            for(int j=7;j>=1;j--){
+                ofile << ((ch_packet[i]>>j) & 1);
+            }
+            ofile << " " << endl;
+        }
+
         packet->syncbyte = (uint8_t)ch_packet[0];
         packet->t_err_indicator = ch_packet[1]>>7 & 0x1;
         packet->payload_unit_start_indicator = ch_packet[1]>>6 & 0x1;
@@ -47,8 +54,9 @@ int main(int argc, char **argv) {
 
         if(packet->syncbyte != 0x47){
             cout<<"sync byte error in packet number "<<(stream.size()+1)<<endl;
+        }else{
+            stream.push_back(*packet);
         }
-        stream.push_back(*packet);
     }
 
     cout<<stream.size()<<endl;
