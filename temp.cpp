@@ -30,7 +30,7 @@ struct pespacket
 int main(int argc, char **argv) {
     vector<string> args(argv, argv+argc);
 
-    vector<tspacket> stream;
+    vector<tspacket> tsstream;
 
     ifstream ifile(args[1], ios::binary);
     ofstream ofile(args[2]);
@@ -43,49 +43,37 @@ int main(int argc, char **argv) {
         cerr << "Error opening file-2: " << args[1] << endl;
         return 1;
     }
-    char ch_packet[188];
-    tspacket *packet = new tspacket();
-    while (ifile.read(ch_packet, 188)) {
-        for(int i=0;i<188;i++){
-            for(int j=7;j>=0;j--){
-                ofile << ((ch_packet[i]>>j) & 1);
-            }
-            ofile << endl;
-        }
-        
-        packet->syncbyte = ch_packet[0];
 
-        if(packet->syncbyte != 0x47){
+    uint8_t sync_byte;
+    tspacket *packet = new tspacket();
+
+    while (ifile.read((char *)&sync_byte, 1)) {
+
+        if (sync_byte != 0x47){
             cout<<"sync byte error detected"<<endl;
             continue;
         }
 
-        packet->t_err_indicator = ch_packet[1]>>7 & 0x1;
-        packet->payload_unit_start_indicator = ch_packet[1]>>6 & 0x1;
-        packet->transport_priority = ch_packet[1]>>5 & 0x1;
-        packet->pid = ( (ch_packet[1] & 0x1f)<<8 ) | ch_packet[2];
-        packet->transport_scrambling_control = ch_packet[3]>>6 & 0x3;
-        packet->adaptation_field_control = ch_packet[3]>>4 & 0x3;
-        packet->continuity_count = ch_packet[3] & 0xf;
-        for (int i=0;i<184;i++){
-            packet->content[i] = ch_packet[4+i];
-        }
+        uint8_t char_packet[188];
+        char_packet[0] = sync_byte;
+        ifile.read((char *)(char_packet+1), 187);
 
-        stream.push_back(*packet);
+        *packet = *(tspacket *)char_packet;
+
+        tsstream.push_back(*packet);
+
+        ofile.write((char *)packet, 188);
     }
 
-    cout << (char)(stream[0].content[1]) << endl << endl;
-
     unordered_map<uint16_t, vector<uint8_t *> > ts_pack_contents;
-    for(int i=0;i<stream.size();i++){
-        tspacket p = stream[i];
+    for(auto p: tsstream){
         ts_pack_contents[p.pid].push_back(p.content);
     }
 
     unordered_map<uint8_t, vector<pespacket> > pes_packets;
 
-    for(auto stream: ts_pack_contents){
-        vector<uint8_t *> contents_184 = stream.second;
+    for(auto tsstream: ts_pack_contents){
+        vector<uint8_t *> contents_184 = tsstream.second;
         int rem_payload_bytes = -1;
         for(auto content_ptr: contents_184){
             for(int i=0;i<184;i++){
@@ -99,7 +87,7 @@ int main(int argc, char **argv) {
                     pack.flags2 = content_byte_ptr[7];
                     pack.header_length = content_byte_ptr[8];
 
-                    payload start byte = i + 9 + pack.flags2>>7 + pack.flags2
+                    // payload start byte = i + 9 + pack.flags2>>7 + pack.flags2
                 }
             }
         }
