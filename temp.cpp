@@ -24,7 +24,16 @@ struct pespacket
     uint8_t flags1;
     uint8_t flags2;
     uint8_t header_length;
-    uint8_t *pts, *dts, *optional, *payload;
+    uint8_t *optional, *payload;
+
+    string serialize(){
+        string stream;
+        stream.insert(0, *(string *)this, 9);
+        stream.insert(9, *(string *)this->optional, header_length);
+        stream.insert(9 + header_length, *(string *)this->payload, packet_length - header_length - 9);
+
+        return stream;
+    }
 };
 
 int main(int argc, char **argv) {
@@ -50,7 +59,7 @@ int main(int argc, char **argv) {
     while (ifile.read((char *)&sync_byte, 1)) {
 
         if (sync_byte != 0x47){
-            cout<<"sync byte error detected"<<endl;
+            cout<<"sync byte error"<<endl;
             continue;
         }
 
@@ -62,7 +71,7 @@ int main(int argc, char **argv) {
 
         tsstream.push_back(*packet);
 
-        ofile.write((char *)packet, 188);
+        // ofile.write((char *)packet, 188);
     }
 
     unordered_map<uint16_t, vector<uint8_t *> > ts_pack_contents;
@@ -70,27 +79,30 @@ int main(int argc, char **argv) {
         ts_pack_contents[p.pid].push_back(p.content);
     }
 
-    unordered_map<uint8_t, vector<pespacket> > pes_packets;
+    unordered_map<uint16_t, string> dmux_pes_stream;
 
-    for(auto tsstream: ts_pack_contents){
-        vector<uint8_t *> contents_184 = tsstream.second;
-        int rem_payload_bytes = -1;
-        for(auto content_ptr: contents_184){
-            for(int i=0;i<184;i++){
-                uint8_t *content_byte_ptr = content_ptr + i;
-                if(*(uint32_t *)content_byte_ptr>>8 == 1){
-                    pespacket pack;
-                    pack.start_prefix = *(uint32_t *)content_byte_ptr >> 8;
-                    pack.stream_id = *(uint32_t *)content_byte_ptr & 255;
-                    pack.packet_length = ((uint16_t *)content_byte_ptr)[2] & 0xffff;
-                    pack.flags1 = content_byte_ptr[6];
-                    pack.flags2 = content_byte_ptr[7];
-                    pack.header_length = content_byte_ptr[8];
-
-                    // payload start byte = i + 9 + pack.flags2>>7 + pack.flags2
+    for(auto stream: ts_pack_contents){
+        int rem_length = -1;
+        string p;
+        for(auto _184_bytes_ptr: stream.second){
+            if(rem_length == -1){
+                uint32_t prefix_code = (*(uint32_t *)_184_bytes_ptr) & 0xffffff;
+                if(prefix_code != 0x1){
+                    cout<<"error PES packet prefix code is not 0x1"<<endl;
+                    continue;
+                }else{
+                    rem_length = *((uint8_t *)_184_bytes_ptr + 8);
                 }
             }
+            int curr_req = (rem_length>184)?184:rem_length;
+            string temp((char *)_184_bytes_ptr, 184);
+            p.append(temp, 184 - curr_req, curr_req);
         }
+        dmux_pes_stream[stream.first] = p;
+    }
+
+    for(auto pes_stream: dmux_pes_stream){
+        ofile << pes_stream.second << endl << endl;
     }
 
     ifile.close();
