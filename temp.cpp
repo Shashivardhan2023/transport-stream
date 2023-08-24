@@ -14,6 +14,13 @@ struct tspacket
     uint8_t adaptation_field_control:2;
     uint8_t continuity_count:4;
     uint8_t content[184];
+
+    string serialize(){
+        string stream;
+        stream.append((char *)this, 188);
+
+        return stream;
+    }
 };
 
 struct pespacket
@@ -71,7 +78,7 @@ int main(int argc, char **argv) {
 
         tsstream.push_back(*packet);
 
-        // ofile.write((char *)packet, 188);
+        ofile << packet->serialize().substr(4);
     }
 
     unordered_map<uint16_t, vector<uint8_t *> > ts_pack_contents;
@@ -99,10 +106,6 @@ int main(int argc, char **argv) {
             p.append(temp, 184 - curr_req, curr_req);
         }
         dmux_pes_stream[stream.first] = p;
-    }
-
-    for(auto pes_stream: dmux_pes_stream){
-        ofile << pes_stream.second << endl << endl;
     }
 
     ifile.close();
